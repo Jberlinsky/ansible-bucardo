@@ -1,0 +1,9 @@
+---
+bucardo_master_database_host: 192.168.100.220
+bucardo_master_databases:
+  - template1
+bucardo_slave_database_hosts:
+  - 192.168.100.230
+postgresql_admin_user: postgres
+bucardo_user: bucardo
+bucardo_user_pass: foobar
