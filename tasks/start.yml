@@ -1,4 +1,0 @@
----
-- name: Start Bucardo
-  shell: "bucardo start"
-  when: bucardo_master

@@ -2,4 +2,3 @@
 - include: firewall.yml
 - include: install.yml
 - include: configure.yml
-- include: start.yml

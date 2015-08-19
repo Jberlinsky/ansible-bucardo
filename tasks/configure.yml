@@ -11,12 +11,12 @@
   when: bucardo_master
   register: command_result
   failed_when: >
-    command_result.rc != 0 and ("already exists" not in command_result.stdout_lines[0])
+    command_result.rc != 0 and ("already exists" not in command_result.stderr)
   changed_when: >
     command_result.rc == 0
 
 - name: Add external masters to Bucardo
-  shell: "bucardo add db REMOTE{{ item[0] }} dbname={{ item[0] }} host={{ item[1] }} user={{ bucardo_user }} password={{ bucardo_user_pass }} --force"
+  shell: "bucardo add db REMOTE{{ item[0] }} dbname={{ item[0] }} host={{ item[1] }} user={{ bucardo_user }} dbpass={{ bucardo_user_pass }}"
   with_nested:
     - bucardo_master_databases
     - bucardo_slave_database_hosts
@@ -25,7 +25,7 @@
   when: bucardo_master
   register: command_result
   failed_when: >
-    command_result.rc != 0 and ("already exists" not in command_result.stdout_lines[0])
+    command_result.rc != 0 and ("already exists" not in command_result.stderr[0])
   changed_when: >
     command_result.rc == 0
 
@@ -66,14 +66,28 @@
     command_result.rc == 0
 
 - name: Add syncs to Bucardo
-  shell: "bucardo add sync {{ item }}s dbs={{ item }}_masters relgroup={{ item }}_tables autokick=0"
+  shell: "bucardo add sync {{ item }}s dbs={{ item }}_masters relgroup={{ item }}_tables autokick=1"
   with_items: bucardo_master_databases
   sudo: Yes
   sudo_user: "{{ postgresql_admin_user }}"
   when: bucardo_master
   register: command_result
-  failed_when: >
-    command_result.rc != 0 and ("could not connect to server: Connection refused" not in command_result.stderr)
   changed_when: >
     command_result.rc == 0
 
+- name: Validate
+  shell: "bucardo status"
+  sudo: Yes
+  sudo_user: "{{ postgresql_admin_user }}"
+  when: bucardo_master
+
+- name: Restart Bucardo
+  shell: "bucardo restart"
+  sudo: Yes
+  when: bucardo_master
+
+- name: Kick Bucardo
+  shell: "bucardo kick all"
+  sudo: Yes
+  sudo_user: "{{ postgresql_admin_user }}"
+  when: bucardo_master
