@@ -29,7 +29,7 @@
   changed_when: >
     command_result.rc == 0
 
-- name: Create master-slave database group
+- name: Create database group
   shell: "bucardo add dbgroup {{ item }}_masters LOCAL{{ item }}:source REMOTE{{ item }}"
   with_items: bucardo_master_databases
   sudo: Yes
@@ -41,12 +41,22 @@
   changed_when: >
     command_result.rc == 0
 
-- name: Add syncs to Bucardo
-  shell: "bucardo add sync {{ item }}s dbs={{ item }}_masters relgroup={{ item }}_tables autokick=0"
+- name: Add syncs to Bucardo (master-master)
+  shell: "bucardo add sync {{ item }}-mm dbs={{ item }}_masters relgroup={{ item }}_tables autokick=0"
   with_items: bucardo_master_databases
   sudo: Yes
   sudo_user: "{{ postgresql_admin_user }}"
-  when: bucardo_master
+  when: bucardo_master && bucardo_replication_type == "master-master"
+  register: command_result
+  changed_when: >
+    command_result.rc == 0
+
+- name: Add syncs to Bucardo (master-slave)
+  shell: "bucardo add sync {{ item }}-ms source=SOURCE{{ item }} targetdb=REMOTE{{ item }} autokick=0"
+  with_items: bucardo_master_databases
+  sudo: Yes
+  sudo_user: "{{ postgresql_admin_user }}"
+  when: bucardo_master && bucardo_replication_type == "master-slave"
   register: command_result
   changed_when: >
     command_result.rc == 0
