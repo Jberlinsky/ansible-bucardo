@@ -1,0 +1,7 @@
+---
+- name: Create replication user
+  postgresql_user:
+    name: "{{ bucardo_user }}"
+    password: "{{ bucardo_user_pass }}"
+    role_attr_flags: REPLICATION
+    state: present
