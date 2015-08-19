@@ -1,0 +1,79 @@
+---
+- name: Determine if we are on the original master
+  set_fact:
+    bucardo_master: bucardo_master_database_host in ansible_all_ipv4_addresses
+
+- name: Add master to Bucardo
+  shell: "bucardo add db LOCAL{{ item }} dbname={{ item }} host=localhost user={{ bucardo_user }} password={{ bucardo_user_pass }}"
+  with_items: bucardo_master_databases
+  sudo: Yes
+  sudo_user: "{{ postgresql_admin_user }}"
+  when: bucardo_master
+  register: command_result
+  failed_when: >
+    command_result.rc != 0 and ("already exists" not in command_result.stdout_lines[0])
+  changed_when: >
+    command_result.rc == 0
+
+- name: Add external masters to Bucardo
+  shell: "bucardo add db REMOTE{{ item[0] }} dbname={{ item[0] }} host={{ item[1] }} user={{ bucardo_user }} password={{ bucardo_user_pass }} --force"
+  with_nested:
+    - bucardo_master_databases
+    - bucardo_slave_database_hosts
+  sudo: Yes
+  sudo_user: "{{ postgresql_admin_user }}"
+  when: bucardo_master
+  register: command_result
+  failed_when: >
+    command_result.rc != 0 and ("already exists" not in command_result.stdout_lines[0])
+  changed_when: >
+    command_result.rc == 0
+
+- name: Add tables to Bucardo
+  shell: "bucardo add all tables relgroup={{ item }}_tables"
+  with_items: bucardo_master_databases
+  sudo: Yes
+  sudo_user: "{{ postgresql_admin_user }}"
+  when: bucardo_master
+  register: command_result
+  failed_when: >
+    command_result.rc != 0 and ("already exists" not in command_result.stdout_lines[0])
+  changed_when: >
+    command_result.rc == 0
+
+- name: Add sequences to Bucardo
+  shell: "bucardo add all sequences relgroup={{ item }}_tables"
+  with_items: bucardo_master_databases
+  sudo: Yes
+  sudo_user: "{{ postgresql_admin_user }}"
+  when: bucardo_master
+  register: command_result
+  failed_when: >
+    command_result.rc != 0 and ("already exists" not in command_result.stdout_lines[0])
+  changed_when: >
+    command_result.rc == 0
+
+- name: Create master-slave database group
+  shell: "bucardo add dbgroup {{ item }}_masters LOCAL{{ item }}:source REMOTE{{ item }}"
+  with_items: bucardo_master_databases
+  sudo: Yes
+  sudo_user: "{{ postgresql_admin_user }}"
+  when: bucardo_master
+  register: command_result
+  failed_when: >
+    command_result.rc != 0 and ("already part of the group" not in command_result.stderr)
+  changed_when: >
+    command_result.rc == 0
+
+- name: Add syncs to Bucardo
+  shell: "bucardo add sync {{ item }}s dbs={{ item }}_masters relgroup={{ item }}_tables autokick=0"
+  with_items: bucardo_master_databases
+  sudo: Yes
+  sudo_user: "{{ postgresql_admin_user }}"
+  when: bucardo_master
+  register: command_result
+  failed_when: >
+    command_result.rc != 0 and ("could not connect to server: Connection refused" not in command_result.stderr)
+  changed_when: >
+    command_result.rc == 0
+

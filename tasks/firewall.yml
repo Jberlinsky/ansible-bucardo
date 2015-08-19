@@ -1,0 +1,4 @@
+---
+- name: Allow access to database remotely
+  ufw: proto=tcp port=5432 rule=allow
+  sudo: Yes
