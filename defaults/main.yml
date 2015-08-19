@@ -8,3 +8,4 @@ postgresql_admin_user: postgres
 bucardo_user: bucardo
 bucardo_user_pass: foobar
 postgresql_data_directory: /var/lib/postgresql/9.4/main/
+postgresql_replication_strategy: "master-slave"

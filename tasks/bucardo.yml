@@ -1,0 +1,150 @@
+---
+- name: Install Bucardo dependencies
+  apt:
+    name: "{{ item }}"
+    state: present
+  with_items:
+    - libdbix-safe-perl
+    - libboolean-perl
+    - libdbd-pg-perl
+    - postgresql-plperl-9.4
+    - expect
+
+- name: Download Bucardo
+  get_url:
+    url: http://bucardo.org/downloads/Bucardo-5.3.1.tar.gz
+    dest: /tmp/bucardo.tar.gz
+
+- name: Create temporary directory
+  file:
+    state: directory
+    path: /tmp/bucardo
+
+- name: Unarchive Bucardo
+  unarchive:
+    src: /tmp/bucardo.tar.gz
+    dest: /tmp/bucardo
+    copy: no
+
+- name: Build Bucardo Makefile
+  shell: "perl Makefile.PL"
+  args:
+    chdir: /tmp/bucardo/Bucardo-5.3.1/
+
+- name: Make Bucardo
+  shell: "make"
+  args:
+    chdir: /tmp/bucardo/Bucardo-5.3.1/
+
+- name: Install Bucardo
+  shell: "make install"
+  sudo: Yes
+  sudo_user: root
+  args:
+    chdir: /tmp/bucardo/Bucardo-5.3.1/
+
+- name: Write install script
+  copy:
+    src=install.sh
+    dest="/tmp/install_bucardo.sh"
+    owner="{{ postgresql_admin_user }}"
+    mode=0755
+
+- name: Create bucardo log directory
+  file:
+    state: directory
+    path: /var/log/bucardo
+
+- name: Install Bucardo on the database
+  shell: "/tmp/install_bucardo.sh"
+  sudo: Yes
+  sudo_user: "{{ postgresql_admin_user }}"
+
+- name: Add master to Bucardo
+  shell: "bucardo add db LOCAL{{ item }} dbname={{ item }} host=localhost user={{ bucardo_user }} password={{ bucardo_user_pass }}"
+  with_items: bucardo_master_databases
+  sudo: Yes
+  sudo_user: "{{ postgresql_admin_user }}"
+  when: bucardo_master
+  register: command_result
+  failed_when: >
+    command_result.rc != 0 and ("already exists" not in command_result.stderr)
+  changed_when: >
+    command_result.rc == 0
+
+- name: Add external masters to Bucardo
+  shell: "bucardo add db REMOTE{{ item[0] }} dbname={{ item[0] }} host={{ item[1] }} user={{ bucardo_user }} dbpass={{ bucardo_user_pass }}"
+  with_nested:
+    - bucardo_master_databases
+    - bucardo_slave_database_hosts
+  sudo: Yes
+  sudo_user: "{{ postgresql_admin_user }}"
+  when: bucardo_master
+  register: command_result
+  failed_when: >
+    command_result.rc != 0 and ("already exists" not in command_result.stderr[0])
+  changed_when: >
+    command_result.rc == 0
+
+- name: Add tables to Bucardo
+  shell: "bucardo add all tables relgroup={{ item }}_tables"
+  with_items: bucardo_master_databases
+  sudo: Yes
+  sudo_user: "{{ postgresql_admin_user }}"
+  when: bucardo_master
+  register: command_result
+  failed_when: >
+    command_result.rc != 0 and ("already exists" not in command_result.stdout_lines[0])
+  changed_when: >
+    command_result.rc == 0
+
+- name: Add sequences to Bucardo
+  shell: "bucardo add all sequences relgroup={{ item }}_tables"
+  with_items: bucardo_master_databases
+  sudo: Yes
+  sudo_user: "{{ postgresql_admin_user }}"
+  when: bucardo_master
+  register: command_result
+  failed_when: >
+    command_result.rc != 0 and ("already exists" not in command_result.stdout_lines[0])
+  changed_when: >
+    command_result.rc == 0
+
+- name: Create master-slave database group
+  shell: "bucardo add dbgroup {{ item }}_masters LOCAL{{ item }}:source REMOTE{{ item }}"
+  with_items: bucardo_master_databases
+  sudo: Yes
+  sudo_user: "{{ postgresql_admin_user }}"
+  when: bucardo_master
+  register: command_result
+  failed_when: >
+    command_result.rc != 0 and ("already part of the group" not in command_result.stderr)
+  changed_when: >
+    command_result.rc == 0
+
+- name: Add syncs to Bucardo
+  shell: "bucardo add sync {{ item }}s dbs={{ item }}_masters relgroup={{ item }}_tables autokick=1"
+  with_items: bucardo_master_databases
+  sudo: Yes
+  sudo_user: "{{ postgresql_admin_user }}"
+  when: bucardo_master
+  register: command_result
+  changed_when: >
+    command_result.rc == 0
+
+- name: Validate
+  shell: "bucardo status"
+  sudo: Yes
+  sudo_user: "{{ postgresql_admin_user }}"
+  when: bucardo_master
+
+- name: Restart Bucardo
+  shell: "bucardo restart"
+  sudo: Yes
+  when: bucardo_master
+
+- name: Kick Bucardo
+  shell: "bucardo kick all"
+  sudo: Yes
+  sudo_user: "{{ postgresql_admin_user }}"
+  when: bucardo_master
