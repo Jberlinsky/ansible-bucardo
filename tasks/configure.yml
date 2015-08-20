@@ -35,23 +35,21 @@
     - recovery.conf
 
 - name: Remove all postgres data
-  file:
-    path: "{{ postgresql_data_directory }}"
-    state: absent
+  shell: "rm -rf {{ postgresql_data_directory }}"
   sudo: Yes
   sudo_user: root
   when: bucardo_slave
 
-- name: Stream existing data from master to replica
+- name: Stream existing data from master to replica (pg_basebackup)
   shell: "PGPASSWORD={{ bucardo_user_pass }} pg_basebackup -h {{ bucardo_master_database_host }} -D {{ postgresql_data_directory }} -P -U {{ bucardo_user }} --xlog-method=stream --no-password -v"
   sudo: Yes
   sudo_user: "{{ postgresql_admin_user }}"
   when: bucardo_slave
 
-# - name: Synchronize postgres data between hosts
+# - name: Synchronize postgres data between hosts (rsync)
   # shell: "rsync -e 'ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no' -cva --inplace --exclude=\"*pg_xlog*,recovery.conf,*pg_stat_tmp*\" {{ postgresql_data_directory }} {{ item }}:{{ postgresql_data_directory }}"
   # with_items: bucardo_slave_database_hosts
-  # when: bucardo_master
+  # when: bucardo_master and postgresql_initial_backup_strategy == "rsync"
 
 - name: Restore temporary copy of postgresql.conf
   shell: "mv {{ postgresql_data_directory }}/../{{ item }} {{ postgresql_data_directory }}/{{ item }}"
