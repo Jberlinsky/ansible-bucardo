@@ -1,6 +1,5 @@
 ---
 - include: firewall.yml
-- include: user.yml
 - include: bucardo.yml
   when: postgresql_replication_strategy == "master-master"
 - include: configure.yml
